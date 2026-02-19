@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: WatermarkSettings = {
   text: '僅供身分驗證使用，他用無效',
   color: '#000000',
   fontSize: 24,
-  opacity: 0.3,
+  opacity: 0.15,
   rotation: -30,
   gap: 150,
   offsetX: 0,
