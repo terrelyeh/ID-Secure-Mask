@@ -1,10 +1,32 @@
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env.API_KEY || '';
+// Helper to safely get env vars in various environments (Vite, Next.js, Standard Node)
+const getApiKey = (): string => {
+  try {
+    // 1. Check for Vite environment (Standard for Vercel React apps)
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_API_KEY;
+    }
+
+    // 2. Check for standard process.env
+    // We strictly check typeof process to avoid "ReferenceError" in browser environments
+    if (typeof process !== 'undefined' && process.env) {
+       // Support standard key, Next.js public key, or CRA key
+       return process.env.API_KEY || process.env.NEXT_PUBLIC_API_KEY || process.env.REACT_APP_API_KEY || '';
+    }
+  } catch (e) {
+    console.warn("Environment variable access failed");
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
 
 export const getWatermarkSuggestion = async (intent: string): Promise<string> => {
   if (!apiKey) {
-    console.warn("API Key not found");
+    console.warn("API Key not found. Please check your Environment Variables (e.g., VITE_API_KEY).");
     return "僅供申辦業務使用";
   }
 
