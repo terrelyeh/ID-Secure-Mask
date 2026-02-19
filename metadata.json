@@ -1,0 +1,5 @@
+{
+  "name": "SecureMark - 證件照浮水印",
+  "description": "A secure, client-side watermark tool for ID photos. Generate custom watermarks instantly to protect your documents.",
+  "requestFramePermissions": []
+}
