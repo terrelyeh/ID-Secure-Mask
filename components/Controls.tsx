@@ -40,7 +40,7 @@ export const Controls: React.FC<ControlsProps> = ({
 }) => {
 
   return (
-    <div className="flex flex-col gap-3 bg-slate-100 rounded-xl shadow-sm border border-slate-200 h-full overflow-y-auto p-3">
+    <div className="flex flex-col gap-3 bg-slate-100 rounded-xl shadow-sm border border-slate-200 lg:h-full lg:overflow-y-auto p-3">
 
       {/* ── Header ────────────────────────────────── */}
       <div className="px-2 pt-1 pb-1">

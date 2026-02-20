@@ -419,7 +419,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Right: Controls */}
-          <div className="lg:col-span-4 h-full max-h-[85vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
+          <div className="lg:col-span-4 lg:h-full">
             <Controls
               settings={settings}
               updateSettings={updateSettings}
