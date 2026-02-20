@@ -133,7 +133,7 @@ export const Controls: React.FC<ControlsProps> = ({
             {(['tiled', 'single'] as const).map((mode) => (
               <button
                 key={mode}
-                onClick={() => updateSettings({ style: mode })}
+                onClick={() => updateSettings({ style: mode, offsetX: 0, offsetY: 0 })}
                 className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${settings.style === mode
                   ? 'bg-blue-50 border-blue-300 text-blue-700'
                   : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
