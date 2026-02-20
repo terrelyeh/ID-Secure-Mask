@@ -331,10 +331,10 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
 
           {/* Left: Canvas / Upload Area */}
-          <div className="lg:col-span-8 flex flex-col h-full min-h-[500px]">
+          <div className="lg:col-span-8 flex flex-col h-full min-h-[300px] lg:min-h-[500px]">
             <div
               className={`relative flex-1 bg-slate-200/50 rounded-2xl border-2 border-dashed overflow-hidden flex items-center justify-center transition-all duration-200
                 ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}
@@ -430,7 +430,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Right: Controls */}
-          <div className="lg:col-span-4 h-full">
+          <div className="lg:col-span-4 h-full max-h-[85vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
             <Controls
               settings={settings}
               updateSettings={updateSettings}

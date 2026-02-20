@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import {
-  Sparkles, Type, Palette, Move, Maximize, FileText, RotateCcw,
+  Type, Palette, Move, Maximize, FileText, RotateCcw,
   Grid3x3, Square, Download, FileDown, Ruler, Calendar, Columns,
 } from 'lucide-react';
 import { WatermarkSettings, WATERMARK_TEMPLATES, FONT_OPTIONS } from '../types';
 import { Button } from './Button';
-import { getWatermarkSuggestion } from '../services/geminiService';
 
 interface ControlsProps {
   settings: WatermarkSettings;
@@ -39,19 +38,6 @@ export const Controls: React.FC<ControlsProps> = ({
   showOriginal,
   onTogglePreview,
 }) => {
-  const [intentInput, setIntentInput] = useState('');
-  const [isSuggesting, setIsSuggesting] = useState(false);
-
-  const handleSuggestion = async () => {
-    if (!intentInput.trim()) return;
-    setIsSuggesting(true);
-    try {
-      const suggestion = await getWatermarkSuggestion(intentInput);
-      updateSettings({ text: suggestion });
-    } finally {
-      setIsSuggesting(false);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-3 bg-slate-100 rounded-xl shadow-sm border border-slate-200 h-full overflow-y-auto p-3">
@@ -82,33 +68,6 @@ export const Controls: React.FC<ControlsProps> = ({
               </option>
             ))}
           </select>
-        </div>
-
-        {/* 1b. AI 智慧撰寫 */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-            AI 智慧撰寫
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={intentInput}
-              onChange={(e) => setIntentInput(e.target.value)}
-              placeholder="申請租屋、開銀行戶頭…"
-              className="min-w-0 flex-1 text-sm rounded-md border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 px-3 py-2"
-              onKeyDown={(e) => e.key === 'Enter' && handleSuggestion()}
-            />
-            <Button
-              variant="primary"
-              onClick={handleSuggestion}
-              isLoading={isSuggesting}
-              className="shrink-0 text-xs px-3 py-2"
-              disabled={!intentInput.trim()}
-            >
-              生成
-            </Button>
-          </div>
         </div>
 
         {/* 1c. 文字內容 */}
@@ -143,7 +102,7 @@ export const Controls: React.FC<ControlsProps> = ({
               }`}
           >
             <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.includeDate ? 'translate-x-4.5' : 'translate-x-0.5'
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.includeDate ? 'translate-x-5' : 'translate-x-0.5'
                 }`}
             />
           </button>
