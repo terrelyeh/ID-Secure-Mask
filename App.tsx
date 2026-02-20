@@ -17,41 +17,51 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
 
+  // Feature 3: before/after preview toggle
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  // Feature 5: store all PDF pages as images
+  const [pdfPages, setPdfPages] = useState<HTMLImageElement[]>([]);
+
   // Handle Image/PDF Upload
   const handleImageUpload = async (file: File) => {
     if (!file) return;
     setIsLoading(true);
+    setPdfPages([]);
+    setShowOriginal(false);
 
     try {
       if (file.type === 'application/pdf') {
-        // Handle PDF
+        // Feature 5: render ALL pdf pages
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-        const page = await pdf.getPage(1); // Render first page
-        
-        const scale = 3.0; // Render at high resolution
-        const viewport = page.getViewport({ scale });
-        
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        if (!tempCtx) throw new Error('Cannot get canvas context');
-        
-        tempCanvas.width = viewport.width;
-        tempCanvas.height = viewport.height;
-        
-        await page.render({
-          canvasContext: tempCtx,
-          viewport: viewport
-        }).promise;
-        
-        const imgUrl = tempCanvas.toDataURL('image/png');
-        const img = new Image();
-        img.onload = () => {
-          setImage(img);
-          resetSettings(img.width, img.height);
-          setIsLoading(false);
-        };
-        img.src = imgUrl;
+        const scale = 3.0;
+
+        const pages: HTMLImageElement[] = [];
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale });
+
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          if (!tempCtx) throw new Error('Cannot get canvas context');
+
+          tempCanvas.width = viewport.width;
+          tempCanvas.height = viewport.height;
+
+          await page.render({ canvasContext: tempCtx, viewport }).promise;
+
+          await new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => { pages.push(img); resolve(); };
+            img.src = tempCanvas.toDataURL('image/png');
+          });
+        }
+
+        setPdfPages(pages);
+        setImage(pages[0]);
+        resetSettings(pages[0].width, pages[0].height);
+        setIsLoading(false);
 
       } else {
         // Handle Image
@@ -68,26 +78,21 @@ const App: React.FC = () => {
         reader.readAsDataURL(file);
       }
     } catch (error) {
-      console.error("Error processing file:", error);
-      alert("檔案處理失敗，請確認檔案格式是否正確。");
+      console.error('Error processing file:', error);
+      alert('檔案處理失敗，請確認檔案格式是否正確。');
       setIsLoading(false);
     }
   };
 
   const resetSettings = (width: number, height: number) => {
-    // Automatically adjust font size based on image resolution
-    // Previous ratio was / 20, increased to / 12 for larger default text
     const newFontSize = Math.max(24, Math.floor(Math.min(width, height) / 12));
-    
-    // Previous gap multiplier was * 6, reduced to * 4 for tighter pattern
     const newGap = Math.max(100, newFontSize * 4);
-    
-    setSettings(prev => ({ 
-      ...prev, 
-      fontSize: newFontSize, 
+    setSettings((prev) => ({
+      ...prev,
+      fontSize: newFontSize,
       gap: newGap,
       offsetX: 0,
-      offsetY: 0
+      offsetY: 0,
     }));
   };
 
@@ -106,7 +111,7 @@ const App: React.FC = () => {
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!image) return;
+    if (!image || showOriginal) return;
     setIsDragging(true);
     lastPos.current = { x: e.clientX, y: e.clientY };
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -114,24 +119,20 @@ const App: React.FC = () => {
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDragging || !image || !canvasRef.current) return;
-    e.preventDefault(); // Prevent scrolling on touch devices
+    e.preventDefault();
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    
-    // Calculate scale factor between visual size and actual canvas size
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     const dx = (e.clientX - lastPos.current.x) * scaleX;
     const dy = (e.clientY - lastPos.current.y) * scaleY;
-
     lastPos.current = { x: e.clientX, y: e.clientY };
 
-    setSettings(prev => ({
+    setSettings((prev) => ({
       ...prev,
       offsetX: prev.offsetX + dx,
-      offsetY: prev.offsetY + dy
+      offsetY: prev.offsetY + dy,
     }));
   };
 
@@ -142,65 +143,71 @@ const App: React.FC = () => {
     }
   };
 
-  const drawWatermark = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !image) return;
+  // Build the effective watermark text (Feature 2: append date if enabled)
+  const getEffectiveText = useCallback(() => {
+    if (settings.includeDate) {
+      const dateStr = new Date().toLocaleDateString('zh-TW');
+      return `${settings.text}（${dateStr}）`;
+    }
+    return settings.text;
+  }, [settings.text, settings.includeDate]);
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const drawWatermarkOnCanvas = useCallback(
+    (canvas: HTMLCanvasElement, img: HTMLImageElement, preview = false) => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // Set canvas size to original image size for high quality
-    canvas.width = image.width;
-    canvas.height = image.height;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
 
-    // Draw original image
-    ctx.drawImage(image, 0, 0);
+      // Feature 3: if preview mode, skip watermark
+      if (preview) return;
 
-    ctx.save();
+      ctx.save();
 
-    // Setup Watermark Style
-    ctx.font = `bold ${settings.fontSize}px 'Noto Sans TC', sans-serif`;
-    ctx.fillStyle = settings.color;
-    ctx.globalAlpha = settings.opacity;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+      const effectiveText = getEffectiveText();
+      // Feature 4: use selected font
+      ctx.font = `bold ${settings.fontSize}px '${settings.fontFamily}', sans-serif`;
+      ctx.fillStyle = settings.color;
+      ctx.globalAlpha = settings.opacity;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
-    if (settings.style === 'single') {
-        // Single Mode: Center + Offset
+      if (settings.style === 'single') {
         ctx.translate(canvas.width / 2 + settings.offsetX, canvas.height / 2 + settings.offsetY);
         ctx.rotate((settings.rotation * Math.PI) / 180);
-        ctx.fillText(settings.text, 0, 0);
-    } else {
-        // Tiled Mode: Grid Pattern
-        
-        // Apply user drag offset first
+        ctx.fillText(effectiveText, 0, 0);
+      } else {
         ctx.translate(settings.offsetX, settings.offsetY);
-
-        // Rotation logic
         const diagonal = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((settings.rotation * Math.PI) / 180);
         ctx.translate(-diagonal, -diagonal);
 
-        // Calculate Grid
-        const textMetrics = ctx.measureText(settings.text);
+        const textMetrics = ctx.measureText(effectiveText);
         const textWidth = textMetrics.width;
         const stepX = textWidth + settings.gap;
         const stepY = settings.fontSize + settings.gap;
 
-        // Draw Pattern
         for (let y = 0; y < diagonal * 2; y += stepY) {
-            for (let x = 0; x < diagonal * 2; x += stepX) {
-                // Stagger every other row
-                const offsetX = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
-                ctx.fillText(settings.text, x + offsetX, y);
-            }
+          for (let x = 0; x < diagonal * 2; x += stepX) {
+            const offsetX = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
+            ctx.fillText(effectiveText, x + offsetX, y);
+          }
         }
-    }
+      }
 
-    ctx.restore();
+      ctx.restore();
+    },
+    [settings, getEffectiveText]
+  );
 
-  }, [image, settings]);
+  const drawWatermark = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !image) return;
+    drawWatermarkOnCanvas(canvas, image, showOriginal);
+  }, [image, showOriginal, drawWatermarkOnCanvas]);
 
   useEffect(() => {
     if (image) {
@@ -212,83 +219,81 @@ const App: React.FC = () => {
   const handleDownload = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const link = document.createElement('a');
     link.download = `secure-mark-${Date.now()}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
 
-  const handleDownloadPDF = () => {
+  // Feature 5: multi-page PDF download
+  const handleDownloadPDF = async () => {
     const canvas = canvasRef.current;
     if (!canvas || !image) return;
 
-    // Determine PDF orientation (A4 usually)
-    // We stick to A4 Portrait unless the image is fit-to-page and landscape
     const isImageLandscape = image.width > image.height;
-    
-    // For specific physical sizes (ID Card, Passport), we usually want standard A4 Portrait
-    // For 'fit' mode, we match the image orientation to maximize space
-    const pdfOrientation = settings.printMode === 'fit' && isImageLandscape ? 'landscape' : 'portrait';
+    const pdfOrientation =
+      settings.printMode === 'fit' && isImageLandscape ? 'landscape' : 'portrait';
 
-    const doc = new jsPDF({
-      orientation: pdfOrientation,
-      unit: 'mm',
-      format: 'a4'
-    });
-
+    const doc = new jsPDF({ orientation: pdfOrientation, unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 10; // 10mm margin
-    
-    const imgRatio = image.width / image.height;
-    
-    let finalWidth, finalHeight;
+    const margin = 10;
 
-    if (settings.printMode === 'id_card') {
-        // Standard ISO 7810 ID-1 size: 85.60 mm width
-        // We set width to 85.6mm, height is calculated by ratio
+    // Determine which images to render: all PDF pages or just the single image
+    const imagesToRender = pdfPages.length > 1 ? pdfPages : [image];
+
+    for (let i = 0; i < imagesToRender.length; i++) {
+      const img = imagesToRender[i];
+      const imgRatio = img.width / img.height;
+
+      let finalWidth: number, finalHeight: number;
+
+      if (settings.printMode === 'id_card') {
         finalWidth = 85.6;
         finalHeight = finalWidth / imgRatio;
-    } else if (settings.printMode === 'passport') {
-        // Standard width for 4x6 photo or similar (approx 10cm or 100mm)
+      } else if (settings.printMode === 'passport') {
         finalWidth = 100;
         finalHeight = finalWidth / imgRatio;
-    } else {
-        // Fit to page (Original Logic)
-        const maxWidth = pageWidth - (margin * 2);
-        const maxHeight = pageHeight - (margin * 2);
+      } else {
+        const maxWidth = pageWidth - margin * 2;
+        const maxHeight = pageHeight - margin * 2;
         const pageRatio = maxWidth / maxHeight;
-        
         if (imgRatio > pageRatio) {
-            finalWidth = maxWidth;
-            finalHeight = maxWidth / imgRatio;
+          finalWidth = maxWidth;
+          finalHeight = maxWidth / imgRatio;
         } else {
-            finalHeight = maxHeight;
-            finalWidth = maxHeight * imgRatio;
+          finalHeight = maxHeight;
+          finalWidth = maxHeight * imgRatio;
         }
-    }
-    
-    // Center the image
-    const x = (pageWidth - finalWidth) / 2;
-    const y = (pageHeight - finalHeight) / 2;
+      }
 
-    const imgData = canvas.toDataURL('image/png');
-    
-    doc.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
-    
-    // Add a small guide text if in ID/Passport mode
-    if (settings.printMode !== 'fit') {
-         doc.setFontSize(8);
-         doc.setTextColor(150);
-         doc.text(`Target Size: ${settings.printMode === 'id_card' ? 'ID Card (8.56cm)' : 'Width 10cm'} | Scale: 100%`, 10, pageHeight - 10);
+      const x = (pageWidth - finalWidth) / 2;
+      const y = (pageHeight - finalHeight) / 2;
+
+      // Render watermark onto an offscreen canvas for this page
+      const offscreen = document.createElement('canvas');
+      drawWatermarkOnCanvas(offscreen, img, false);
+      const imgData = offscreen.toDataURL('image/png');
+
+      if (i > 0) doc.addPage();
+      doc.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
+
+      if (settings.printMode !== 'fit') {
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(
+          `Target Size: ${settings.printMode === 'id_card' ? 'ID Card (8.56cm)' : 'Width 10cm'} | Page ${i + 1}/${imagesToRender.length}`,
+          10,
+          pageHeight - 10
+        );
+      }
     }
 
     doc.save(`secure-mark-${Date.now()}.pdf`);
   };
 
   const updateSettings = (newSettings: Partial<WatermarkSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    setSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
   return (
@@ -317,10 +322,10 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-          
+
           {/* Left: Canvas / Upload Area */}
           <div className="lg:col-span-8 flex flex-col h-full min-h-[500px]">
-            <div 
+            <div
               className={`relative flex-1 bg-slate-200/50 rounded-2xl border-2 border-dashed overflow-hidden flex items-center justify-center transition-all duration-200
                 ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}
                 ${!image ? 'hover:border-slate-400 hover:bg-slate-100' : 'border-transparent bg-slate-900'}
@@ -346,9 +351,9 @@ const App: React.FC = () => {
                     </p>
                     <label className="cursor-pointer inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
                       選擇檔案
-                      <input 
-                        type="file" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        className="hidden"
                         accept="image/*,application/pdf"
                         onChange={onFileChange}
                       />
@@ -357,9 +362,16 @@ const App: React.FC = () => {
                 )
               ) : (
                 <div className="relative w-full h-full flex items-center justify-center bg-slate-900/90 p-4">
-                  <canvas 
-                    ref={canvasRef} 
-                    className={`max-w-full max-h-full object-contain shadow-2xl rounded-lg touch-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                  {/* Feature 3: preview label badge */}
+                  {showOriginal && (
+                    <div className="absolute top-4 left-4 z-10 bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-md shadow">
+                      原始圖片預覽
+                    </div>
+                  )}
+                  <canvas
+                    ref={canvasRef}
+                    className={`max-w-full max-h-full object-contain shadow-2xl rounded-lg touch-none ${isDragging ? 'cursor-grabbing' : showOriginal ? 'cursor-default' : 'cursor-grab'
+                      }`}
                     style={{ maxHeight: '80vh' }}
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
@@ -367,48 +379,56 @@ const App: React.FC = () => {
                     onPointerLeave={handlePointerUp}
                   />
                   <div className="absolute top-4 right-4 flex gap-2">
-                     <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-md text-sm transition-colors border border-white/10">
-                        更換檔案
-                        <input 
-                        type="file" 
-                        className="hidden" 
+                    {/* Feature 5: show page count if multi-page */}
+                    {pdfPages.length > 1 && (
+                      <span className="bg-white/10 backdrop-blur-md text-white px-3 py-1.5 rounded-md text-sm border border-white/10">
+                        PDF {pdfPages.length} 頁（下載 PDF 將含全部頁面）
+                      </span>
+                    )}
+                    <label className="cursor-pointer bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-md text-sm transition-colors border border-white/10">
+                      更換檔案
+                      <input
+                        type="file"
+                        className="hidden"
                         accept="image/*,application/pdf"
                         onChange={onFileChange}
-                        />
+                      />
                     </label>
                   </div>
                 </div>
               )}
             </div>
-            
+
             {/* Quick tips */}
             {!image && (
-                <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {[
-                        { title: '安全隱私', desc: '100% 本地端處理，無上傳風險' },
-                        { title: '支援 PDF', desc: '可上傳 PDF 格式，自動轉換首頁' },
-                        { title: '拖曳調整', desc: '直接拖曳畫面可調整浮水印位置' }
-                    ].map((item, idx) => (
-                        <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                            <h4 className="font-medium text-slate-900 mb-1 flex items-center gap-2">
-                              {idx === 1 && <FileType className="w-4 h-4 text-blue-500" />}
-                              {item.title}
-                            </h4>
-                            <p className="text-sm text-slate-500">{item.desc}</p>
-                        </div>
-                    ))}
-                </div>
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { title: '安全隱私', desc: '100% 本地端處理，無上傳風險' },
+                  { title: '支援 PDF', desc: '可上傳 PDF，自動處理所有頁面並匯出' },
+                  { title: '拖曳調整', desc: '直接拖曳畫面可調整浮水印位置' },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <h4 className="font-medium text-slate-900 mb-1 flex items-center gap-2">
+                      {idx === 1 && <FileType className="w-4 h-4 text-blue-500" />}
+                      {item.title}
+                    </h4>
+                    <p className="text-sm text-slate-500">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
           {/* Right: Controls */}
           <div className="lg:col-span-4 h-full">
-            <Controls 
-              settings={settings} 
-              updateSettings={updateSettings} 
+            <Controls
+              settings={settings}
+              updateSettings={updateSettings}
               onDownload={handleDownload}
               onDownloadPDF={handleDownloadPDF}
               hasImage={!!image}
+              showOriginal={showOriginal}
+              onTogglePreview={setShowOriginal}
             />
           </div>
         </div>
