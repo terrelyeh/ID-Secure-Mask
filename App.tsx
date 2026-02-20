@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, AlertCircle, ShieldCheck, FileType } from 'lucide-react';
+import { Upload, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Controls } from './components/Controls';
 import { WatermarkSettings, DEFAULT_SETTINGS } from './types';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -311,14 +311,23 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-1.5 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-baseline gap-2">
-              <span className="text-2xl">證件照浮水印</span>
-              <span className="text-slate-400 font-normal text-sm hidden sm:inline">SecureMark</span>
-            </h1>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 leading-tight">
+                證件照浮水印
+                <span className="text-slate-400 font-normal text-sm ml-2 hidden sm:inline">SecureMark</span>
+              </h1>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                {['🔒 本地處理', '📄 支援 PDF', '↕ 拖曳調整'].map((tag) => (
+                  <span key={tag} className="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-600">
             <span className="hidden sm:flex items-center gap-1">
@@ -409,24 +418,6 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Quick tips */}
-            {!image && (
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { title: '安全隱私', desc: '100% 本地端處理，無上傳風險' },
-                  { title: '支援 PDF', desc: '可上傳 PDF，自動處理所有頁面並匯出' },
-                  { title: '拖曳調整', desc: '直接拖曳畫面可調整浮水印位置' },
-                ].map((item, idx) => (
-                  <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                    <h4 className="font-medium text-slate-900 mb-1 flex items-center gap-2">
-                      {idx === 1 && <FileType className="w-4 h-4 text-blue-500" />}
-                      {item.title}
-                    </h4>
-                    <p className="text-sm text-slate-500">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Right: Controls */}
