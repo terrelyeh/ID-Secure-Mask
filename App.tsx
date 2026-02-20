@@ -315,18 +315,16 @@ const App: React.FC = () => {
             <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900 leading-tight">
-                證件照浮水印
-                <span className="text-slate-400 font-normal text-sm ml-2 hidden sm:inline">SecureMark</span>
-              </h1>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                {['🔒 本地處理', '📄 支援 PDF', '↕ 拖曳調整'].map((tag) => (
-                  <span key={tag} className="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                    {tag}
-                  </span>
-                ))}
-              </div>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight whitespace-nowrap">
+              證件照浮水印
+              <span className="text-slate-400 font-normal text-sm ml-2 hidden sm:inline">SecureMark</span>
+            </h1>
+            <div className="hidden md:flex items-center gap-1.5 ml-2">
+              {['🔒 本地處理', '📄 支援 PDF', '↕ 拖曳調整'].map((tag) => (
+                <span key={tag} className="text-xs font-medium bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">
+                  {tag}
+                </span>
+              ))}
             </div>
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-600">
