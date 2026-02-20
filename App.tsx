@@ -8,6 +8,8 @@ import { jsPDF } from 'jspdf';
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
+const getTodayStr = () => new Date().toLocaleDateString('zh-TW');
+
 const App: React.FC = () => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [settings, setSettings] = useState<WatermarkSettings>(DEFAULT_SETTINGS);
@@ -143,15 +145,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Build the effective watermark text (Feature 2: append date if enabled)
-  const getEffectiveText = useCallback(() => {
-    if (settings.includeDate) {
-      const dateStr = new Date().toLocaleDateString('zh-TW');
-      return `${settings.text}（${dateStr}）`;
-    }
-    return settings.text;
-  }, [settings.text, settings.includeDate]);
-
   const drawWatermarkOnCanvas = useCallback(
     (canvas: HTMLCanvasElement, img: HTMLImageElement, preview = false) => {
       const ctx = canvas.getContext('2d');
@@ -161,23 +154,38 @@ const App: React.FC = () => {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
 
-      // Feature 3: if preview mode, skip watermark
       if (preview) return;
 
       ctx.save();
-
-      const effectiveText = getEffectiveText();
-      // Feature 4: use selected font
-      ctx.font = `bold ${settings.fontSize}px '${settings.fontFamily}', sans-serif`;
       ctx.fillStyle = settings.color;
       ctx.globalAlpha = settings.opacity;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
+      const mainText = settings.text;
+      const dateText = settings.includeDate ? getTodayStr() : null;
+      const dateFontSize = Math.round(settings.fontSize * 0.65);
+      // Line spacing: half main font below baseline, half date font above
+      const lineSpacing = Math.round(settings.fontSize * 0.15);
+      // Vertical center offset so the two-line block is centered
+      const blockHalfH = dateText
+        ? (settings.fontSize / 2 + lineSpacing + dateFontSize / 2) / 2
+        : 0;
+
+      /** Draw one watermark unit at (cx, cy), already translated/rotated */
+      const drawUnit = (cx: number, cy: number) => {
+        ctx.font = `bold ${settings.fontSize}px '${settings.fontFamily}', sans-serif`;
+        ctx.fillText(mainText, cx, cy - (dateText ? blockHalfH : 0));
+        if (dateText) {
+          ctx.font = `${dateFontSize}px '${settings.fontFamily}', sans-serif`;
+          ctx.fillText(dateText, cx, cy + settings.fontSize / 2 + lineSpacing - blockHalfH + dateFontSize / 2);
+        }
+      };
+
       if (settings.style === 'single') {
         ctx.translate(canvas.width / 2 + settings.offsetX, canvas.height / 2 + settings.offsetY);
         ctx.rotate((settings.rotation * Math.PI) / 180);
-        ctx.fillText(effectiveText, 0, 0);
+        drawUnit(0, 0);
       } else {
         ctx.translate(settings.offsetX, settings.offsetY);
         const diagonal = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
@@ -185,22 +193,24 @@ const App: React.FC = () => {
         ctx.rotate((settings.rotation * Math.PI) / 180);
         ctx.translate(-diagonal, -diagonal);
 
-        const textMetrics = ctx.measureText(effectiveText);
-        const textWidth = textMetrics.width;
+        // Measure step size using main text
+        ctx.font = `bold ${settings.fontSize}px '${settings.fontFamily}', sans-serif`;
+        const textWidth = ctx.measureText(mainText).width;
         const stepX = textWidth + settings.gap;
-        const stepY = settings.fontSize + settings.gap;
+        const blockH = dateText ? settings.fontSize + lineSpacing + dateFontSize : settings.fontSize;
+        const stepY = blockH + settings.gap;
 
         for (let y = 0; y < diagonal * 2; y += stepY) {
           for (let x = 0; x < diagonal * 2; x += stepX) {
-            const offsetX = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
-            ctx.fillText(effectiveText, x + offsetX, y);
+            const ox = (y / stepY) % 2 === 0 ? 0 : stepX / 2;
+            drawUnit(x + ox, y + blockH / 2);
           }
         }
       }
 
       ctx.restore();
     },
-    [settings, getEffectiveText]
+    [settings]
   );
 
   const drawWatermark = useCallback(() => {
@@ -239,8 +249,8 @@ const App: React.FC = () => {
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 10;
 
-    // Determine which images to render: all PDF pages or just the single image
-    const imagesToRender = pdfPages.length > 1 ? pdfPages : [image];
+    // Use all PDF pages when available, otherwise just the single image
+    const imagesToRender = pdfPages.length > 0 ? pdfPages : [image];
 
     for (let i = 0; i < imagesToRender.length; i++) {
       const img = imagesToRender[i];
